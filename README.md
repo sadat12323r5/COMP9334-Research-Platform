@@ -20,8 +20,9 @@ By completing the exercises on this platform you will learn to:
 1. **Set up an experimental capacity-planning platform** — containerised
    servers, an open-loop Poisson load generator, and per-request measurement
    of queueing and service times.
-2. **Process measurements to obtain model parameters** — extract arrival
-   processes, service-time distributions, and utilisation from raw traces.
+2. **Process measurements to obtain the parameters for discrete event
+   simulation** — extract arrival processes, service-time distributions, and
+   utilisation from raw traces.
 3. **Build a discrete event simulation (DES) for different servers** — from a
    single-worker FIFO queue to multi-worker systems.
 4. **Use the simulation for prediction** — forecast the response-time
