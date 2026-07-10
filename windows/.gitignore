@@ -1,0 +1,5 @@
+data/live_logs/*
+!data/live_logs/.gitkeep
+traces/*
+!traces/.gitkeep
+__pycache__/
