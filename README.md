@@ -371,35 +371,43 @@ four stages matching the learning outcomes.
 
 ## Which servers should you model?
 
-You are **not** expected to model all eleven configurations. The intended
-scope is **two servers**:
+You are **not** expected to model all eleven configurations. But the zoo is
+not arbitrary: each configuration rewards a different modelling idea. The
+architecture column below — together with your own measurements and the
+server's source code, which you are encouraged to read — should suggest what
+kind of model to try. Whether your first candidate survives contact with the
+data is the research question.
 
-1. **Core (everyone): `python_dsp`.** One worker process, one core, a real
-   CPU-bound workload — the cleanest possible M/G/1 candidate. Everyone
-   modelling the same core server makes results comparable and mistakes easy
-   to diagnose. (You will already know it well from the labs; the `go` server
-   from Lab 3 is its synthetic cousin and a good sanity check for your DES —
-   it even logs the service time it *intended* next to the one it delivered.)
+| Config | Architecture | Worth asking yourself |
+|---|---|---|
+| `go` | 1 goroutine, FIFO channel | the simplest case there is — and it logs the service time it *intended* next to the one it delivered, so a simulation can be checked piece by piece |
+| `python_dsp` | 1 sync worker, 1 core | how far does the simplest textbook model take you, if you fit the service distribution from data instead of assuming one? |
+| `python_dsp_mc` | 3 workers on 3 cores, one shared socket | three workers — but is it one queue or three? what would each imply for waiting times? |
+| `node_dsp` | 1 event loop | an event loop serves one thing at a time — is that the same thing as a FIFO queue? |
+| `node_dsp_mc` | 3-process cluster behind one port | how do requests get distributed among the processes, and does it matter? (the `pid` column knows) |
+| `java_dsp` | 4 threads on **1** core | what does "number of servers" even mean when there are more workers than cores? |
+| `java_dsp_mc` | 3 threads on 3 cores | look closely at the start of a run — is the server the same server all the way through? |
+| `apache_dsp` | many worker processes on 1 core | when several processes share one core, what happens to the time each individual request takes? |
+| `apache_msg` | Apache + a shared file store, GET/POST mix | two kinds of requests share one server — do they deserve the same treatment in a model? |
+| `go_sqlite` | worker + SQLite database | a request can wait in more than one place here — where does the queue really form? |
+| `go_sqlite_mc` | 3 workers + a database that serialises writes | three workers, but only one may write at a time — what is limiting whom? |
 
-2. **Challenge (choose one).** Each of these breaks at least one textbook
-   assumption; *which* assumption, and how badly, is yours to discover. In
-   roughly increasing order of modelling difficulty:
+The intended scope is **two servers**:
 
-   | Challenge server | What you'd be investigating |
-   |---|---|
-   | `python_dsp_mc` | Is a 3-worker server really one shared M/G/3 queue? |
-   | `java_dsp` | A thread pool on one core — and what happens early in a run |
-   | `node_dsp_mc` | A cluster of 3 event loops behind one port |
-   | `apache_dsp` | Many worker processes sharing a single core |
-   | `go_sqlite` | CPU work plus a database — where does the queue really form? |
+1. **Core (everyone): `python_dsp`.** Everyone modelling the same core server
+   makes results comparable and mistakes easy to diagnose. Build the full
+   Stage 2–4 pipeline here first; a working pipeline on an easy server is
+   worth more than a broken one on a hard server. (The `go` server from
+   Lab 3 is its synthetic cousin — the ideal sanity check for your first
+   simulation.)
+2. **Challenge (choose one from the table).** Run your pipeline from the core
+   server unchanged first, watch where its predictions fail, and let the
+   failure — plus the question in the table — point you to a better model.
+   Explaining *why* the simple model broke is worth as much as the fix.
 
-   Your Stage 2–4 pipeline should run on the challenge server unchanged; the
-   interesting part is explaining where its predictions degrade compared to
-   the core server, and why.
-
-Model the core server first, end to end (Stages 2–4), before touching the
-challenge server. A working pipeline on an easy server is worth more than a
-broken one on a hard server.
+Ambitious pairs or groups covering several rows of the table end up with a
+comparative study of when each kind of model is the right one — which is
+exactly what a capacity planner needs to know.
 
 **Stage 1 — Platform and measurement** = Labs 0–4 above.
 
