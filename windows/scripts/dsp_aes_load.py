@@ -93,12 +93,15 @@ def build_signal_pool(n_signals: int, signal_length: int, seed: int,
 
 def send_request(url: str, body: dict, aes_key: bytes, verify: bool,
                  timeout: float, results: list, lock: threading.Lock) -> None:
+    send_ns = time.time_ns()
     t0 = time.perf_counter()
     ok = False
+    status = 0
     err_msg = ''
     try:
         resp = requests.post(url, json=body, timeout=timeout)
         elapsed = time.perf_counter() - t0
+        status = resp.status_code
         if resp.status_code == 200:
             ok = True
             if verify:
@@ -119,7 +122,19 @@ def send_request(url: str, body: dict, aes_key: bytes, verify: bool,
         err_msg = str(exc)
 
     with lock:
-        results.append((ok, elapsed, err_msg))
+        results.append((ok, elapsed, err_msg, send_ns, status))
+
+
+def write_client_log(path: str, rows: list) -> None:
+    """External measurement system: one CSV row per request as observed by the
+    CLIENT — send timestamp and wall-clock until the full response arrived.
+    rows: (ok, elapsed_s, err, send_ns, status)."""
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write('send_unix_ns,client_response_ms,status_code,ok,error\n')
+        for ok, elapsed, err, send_ns, status in sorted(rows, key=lambda r: r[3]):
+            err_txt = err.replace(',', ';').replace('\n', ' ')[:80]
+            f.write(f'{send_ns},{elapsed*1000:.3f},{status},{int(ok)},{err_txt}\n')
+    print(f'client trace written -> {path}')
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +179,9 @@ def parse_args():
                         help='Number of pre-generated signal packets in pool (default: 200)')
     parser.add_argument('--verify', action='store_true',
                         help='Decrypt and verify each response (adds client-side overhead)')
+    parser.add_argument('--client-log', default='',
+                        help='Optional path: write a per-request client-side trace CSV '
+                             '(send_unix_ns, client_response_ms, status, ok, error)')
     return parser.parse_args()
 
 
@@ -243,6 +261,8 @@ def main():
               f'max={ok_times[-1]:.1f}')
     if err_list:
         print(f'error sample (up to 5): {[e[2] for e in err_list[:5]]}')
+    if args.client_log:
+        write_client_log(args.client_log, results)
 
 
 if __name__ == '__main__':

@@ -93,9 +93,20 @@ python3 scripts/sweep.py --server python_dsp --rates 10 25 --duration 30
 head -3 traces/python_dsp_1c/python_dsp_10rps_run01.csv
 ```
 
-You now have real measured traces. Read `docs/RESEARCH_BRIEF.md` for the full
-exercise, `docs/QUEUEING_PRIMER.md` for the theory you need, and
-`docs/TRACE_FORMAT.md` for the exact meaning of every CSV column.
+You now have real measured traces — two per run, in fact: a **server-side**
+trace (timestamps written inside the server) and a **client-side** trace (the
+load generator's external view of the same requests). Comparing them is one
+of the first exercises.
+
+Where to go next:
+
+- **`docs/LAB_GUIDE.md`** — start here: five guided labs with validation
+  checkpoints, from your first load-generator run through finding the
+  saturation point to scoring your own prediction.
+- `docs/RESEARCH_BRIEF.md` — the full research exercise.
+- `docs/QUEUEING_PRIMER.md` — the theory you need.
+- `docs/TRACE_FORMAT.md` — the exact meaning of every CSV column in both
+  trace types.
 
 ## The Rules of the Game
 

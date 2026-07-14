@@ -1,15 +1,40 @@
 # Trace Format Reference
 
-`scripts/sweep.py` collects one CSV per (server, rate, run):
+`scripts/sweep.py` collects TWO CSVs per (server, rate, run) — the same
+experiment measured from two independent vantage points:
 
 ```
-traces/<server_folder>/<tag>_<rate>rps_run<NN>.csv
-traces/<server_folder>/<tag>_<rate>rps_run<NN>_meta.json
+traces/<server_folder>/<tag>_<rate>rps_run<NN>.csv          server-side (internal)
+traces/<server_folder>/<tag>_<rate>rps_run<NN>_client.csv   client-side (external)
+traces/<server_folder>/<tag>_<rate>rps_run<NN>_meta.json    run metadata
 ```
 
 Run numbers auto-increment; existing traces are never overwritten.
 
-## Columns common to all servers
+## Client-side trace (external measurement)
+
+Written by the load generator (`--client-log`): one row per request as the
+CLIENT observed it, treating the server as a black box.
+
+| Column | Meaning |
+|---|---|
+| `send_unix_ns` | When the client sent the request (Unix epoch ns) |
+| `client_response_ms` | Send until the complete response was received |
+| `status_code` | HTTP status (0 = no response / transport error) |
+| `ok` | 1 if the request succeeded |
+| `error` / `method` | Error text (dsp/sqlite) or HTTP method (apache) |
+
+`client_response_ms` includes everything the server-side `response_ms`
+includes PLUS connection setup, network transit, kernel accept-queue wait,
+and client-side scheduling delays. It is always ≥ the server-side value for
+the same request, and it is the only view a real user of the service has.
+See `LAB_GUIDE.md` Lab 2 for the comparison exercise.
+
+## Server-side trace (internal measurement)
+
+Written by the server itself, with timestamps taken inside the process.
+
+### Columns common to all servers
 
 | Column | Meaning |
 |---|---|

@@ -5,9 +5,14 @@ For each requested rate it:
   1. Truncates the server's live CSV log and pre-writes the correct header
      (most servers write their header only once per process start, so after a
      truncation the header would otherwise be lost).
-  2. Runs the matching Poisson load generator for --duration seconds.
-  3. Copies the captured trace to traces/<server>/<tag>_<rate>rps_runNN.csv
-     together with a small metadata JSON.
+  2. Runs the matching Poisson load generator for --duration seconds, with
+     client-side logging enabled.
+  3. Saves TWO traces per run plus a metadata JSON:
+       traces/<server>/<tag>_<rate>rps_runNN.csv         (server-side, internal)
+       traces/<server>/<tag>_<rate>rps_runNN_client.csv  (client-side, external)
+     The server trace is written by timestamps inside the server; the client
+     trace is the load generator's own view (send time -> full response
+     received). Comparing the two is part of the lab exercises.
 
 Run numbers auto-increment, so re-running the same command adds new trials and
 never overwrites existing traces.
@@ -118,24 +123,28 @@ def reset_live_csv(path, header):
     os.chmod(path, 0o666)
 
 
-def load_cmd(kind, url, rate, duration, seed):
+def load_cmd(kind, url, rate, duration, seed, client_log=""):
     py = sys.executable
     if kind == "dsp":
-        return [py, os.path.join(HERE, "dsp_aes_load.py"), "--url", url,
-                "--rate", str(rate), "--duration", str(duration),
-                "--aes-key", AES_KEY, "--seed", str(seed)]
-    if kind == "apache":
-        return [py, os.path.join(HERE, "apache_load.py"), "--base-url", url,
-                "--rate", str(rate), "--duration", str(duration),
-                "--seed", str(seed)]
-    if kind == "sqlite":
-        return [py, os.path.join(HERE, "sqlite_load.py"), "--url", url,
-                "--rate", str(rate), "--duration", str(duration),
-                "--seed", str(seed)]
-    # "go": plain GETs against the root route.
-    return [py, os.path.join(HERE, "poisson_load_generator.py"), "--url", url + "/",
-            "--rate", str(rate), "--duration", str(duration),
-            "--seed", str(seed)]
+        cmd = [py, os.path.join(HERE, "dsp_aes_load.py"), "--url", url,
+               "--rate", str(rate), "--duration", str(duration),
+               "--aes-key", AES_KEY, "--seed", str(seed)]
+    elif kind == "apache":
+        cmd = [py, os.path.join(HERE, "apache_load.py"), "--base-url", url,
+               "--rate", str(rate), "--duration", str(duration),
+               "--seed", str(seed)]
+    elif kind == "sqlite":
+        cmd = [py, os.path.join(HERE, "sqlite_load.py"), "--url", url,
+               "--rate", str(rate), "--duration", str(duration),
+               "--seed", str(seed)]
+    else:
+        # "go": plain GETs against the root route.
+        cmd = [py, os.path.join(HERE, "poisson_load_generator.py"), "--url", url + "/",
+               "--rate", str(rate), "--duration", str(duration),
+               "--seed", str(seed)]
+    if client_log:
+        cmd += ["--client-log", client_log]
+    return cmd
 
 
 def main():
@@ -163,12 +172,14 @@ def main():
         run = run0 + t
         for rate in rates:
             dest = os.path.join(out_dir, f"{tag}_{rate}rps_run{run:02d}.csv")
+            client_dest = os.path.join(out_dir, f"{tag}_{rate}rps_run{run:02d}_client.csv")
             print(f"=== {args.server} {rate} rps run{run:02d} ===")
             reset_live_csv(live_csv, header)
             time.sleep(0.5)
             seed = args.seed_base + run - 1
             started = datetime.now(timezone.utc).isoformat()
-            cmd = load_cmd(kind, url, rate, args.duration, seed)
+            cmd = load_cmd(kind, url, rate, args.duration, seed,
+                           client_log=client_dest)
             try:
                 subprocess.run(cmd, timeout=args.duration + 60)
             except subprocess.TimeoutExpired:

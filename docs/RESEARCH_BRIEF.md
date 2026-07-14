@@ -14,6 +14,11 @@ simulation (or another predictive model), and use it for prediction.
 
 ### Stage 1 — Platform setup and measurement (Learning Outcome 1)
 
+Work through `LAB_GUIDE.md` (Labs 0–4) — it walks this stage step by step
+with validation checkpoints, including the two measurement systems
+(server-side vs client-side traces) and finding your machine's saturation
+points. In summary:
+
 1. Pick one server to start with (`python_dsp` is a friendly first choice).
 2. Start it, smoke-test it, and run a sweep at several low rates, e.g.:
    ```bash

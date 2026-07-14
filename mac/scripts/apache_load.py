@@ -32,15 +32,20 @@ def parse_args():
                         help="Thread pool size (0 = auto)")
     parser.add_argument("--seed", type=int, default=0,
                         help="RNG seed (0 = time-based)")
+    parser.add_argument("--client-log", default="",
+                        help="Optional path: write per-request client-side trace CSV")
     return parser.parse_args()
 
 
 def do_get(url, timeout):
+    send_ns = time.time_ns()
     req = urllib.request.Request(url)
     t0 = time.perf_counter()
+    status = 0
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             r.read()
+            status = r.status
             ok = 200 <= r.status < 300
             svc_target = r.headers.get("X-Service-Target-Us", "")
             svc_actual = r.headers.get("X-Service-Actual-Ms", "")
@@ -48,16 +53,19 @@ def do_get(url, timeout):
         ok = False
         svc_target = svc_actual = ""
     latency = time.perf_counter() - t0
-    return ok, latency, svc_target, svc_actual
+    return ok, latency, svc_target, svc_actual, send_ns, status
 
 
 def do_post(url, body_bytes, timeout):
+    send_ns = time.time_ns()
     req = urllib.request.Request(url, data=body_bytes,
                                  headers={"Content-Type": "application/json"})
     t0 = time.perf_counter()
+    status = 0
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             r.read()
+            status = r.status
             ok = 200 <= r.status < 300
             svc_target = r.headers.get("X-Service-Target-Us", "")
             svc_actual = r.headers.get("X-Service-Actual-Ms", "")
@@ -65,7 +73,7 @@ def do_post(url, body_bytes, timeout):
         ok = False
         svc_target = svc_actual = ""
     latency = time.perf_counter() - t0
-    return ok, latency, svc_target, svc_actual
+    return ok, latency, svc_target, svc_actual, send_ns, status
 
 
 def main():
@@ -80,15 +88,18 @@ def main():
     lock = threading.Lock()
     latencies = {"GET": [], "POST": []}
     counts = {"sent": 0, "ok": 0, "err": 0}
+    client_rows = []
 
     def on_done(fut, method):
         try:
-            ok, lat, _, _ = fut.result()
+            ok, lat, _, _, send_ns, status = fut.result()
         except Exception:
-            ok, lat = False, 0.0
+            ok, lat, send_ns, status = False, 0.0, time.time_ns(), 0
         with lock:
             counts["ok" if ok else "err"] += 1
             latencies[method].append(lat)
+            if args.client_log:
+                client_rows.append((send_ns, lat * 1000, status, ok, method))
 
     start = time.perf_counter()
     end = start + args.duration
@@ -144,6 +155,13 @@ def main():
     print(f"ALL   p50={pct(all_lats,50)*1000:.1f}ms p95={pct(all_lats,95)*1000:.1f}ms p99={pct(all_lats,99)*1000:.1f}ms")
     print(f"GET   p50={pct(get_lats,50)*1000:.1f}ms p95={pct(get_lats,95)*1000:.1f}ms p99={pct(get_lats,99)*1000:.1f}ms n={len(get_lats)}")
     print(f"POST  p50={pct(post_lats,50)*1000:.1f}ms p95={pct(post_lats,95)*1000:.1f}ms p99={pct(post_lats,99)*1000:.1f}ms n={len(post_lats)}")
+
+    if args.client_log:
+        with open(args.client_log, "w", encoding="utf-8") as f:
+            f.write("send_unix_ns,client_response_ms,status_code,ok,method\n")
+            for send_ns, ms, status, ok, method in sorted(client_rows):
+                f.write(f"{send_ns},{ms:.3f},{status},{int(ok)},{method}\n")
+        print(f"client trace written -> {args.client_log}")
 
 
 if __name__ == "__main__":

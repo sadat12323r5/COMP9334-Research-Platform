@@ -16,16 +16,28 @@ def pct(sv, p):
 
 
 def send(url, body, timeout, results, lock):
+    send_ns = time.time_ns()
     t0 = time.perf_counter()
-    ok, err = False, ''
+    ok, err, status = False, '', 0
     try:
         r = requests.post(url, json=body, timeout=timeout)
+        status = r.status_code
         ok = r.status_code == 200
         if not ok: err = f'http {r.status_code}'
     except Exception as e:
         err = str(e)
     with lock:
-        results.append((ok, (time.perf_counter()-t0)*1000, err))
+        results.append((ok, (time.perf_counter()-t0)*1000, err, send_ns, status))
+
+
+def write_client_log(path, rows):
+    """External measurement: per-request client-side trace CSV."""
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write('send_unix_ns,client_response_ms,status_code,ok,error\n')
+        for ok, ms, err, send_ns, status in sorted(rows, key=lambda r: r[3]):
+            err_txt = err.replace(',', ';').replace('\n', ' ')[:80]
+            f.write(f'{send_ns},{ms:.3f},{status},{int(ok)},{err_txt}\n')
+    print(f'client trace written -> {path}')
 
 
 def parse_args():
@@ -35,6 +47,8 @@ def parse_args():
     p.add_argument('--duration', type=float, default=90.0)
     p.add_argument('--timeout',  type=float, default=15.0)
     p.add_argument('--seed',     type=int,   default=42)
+    p.add_argument('--client-log', default='',
+                   help='Optional path: write per-request client-side trace CSV')
     return p.parse_args()
 
 
@@ -74,6 +88,8 @@ def main():
               f'p95={pct(ok_times,95):.1f} p99={pct(ok_times,99):.1f}')
     if errs:
         print(f'errors (up to 5): {[e[2] for e in errs[:5]]}')
+    if args.client_log:
+        write_client_log(args.client_log, results)
 
 
 if __name__ == '__main__':

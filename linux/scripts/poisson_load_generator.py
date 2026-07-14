@@ -51,22 +51,30 @@ def parse_args() -> argparse.Namespace:
         default="X-Request-Id",
         help="Header name to carry request ID (default: X-Request-Id)",
     )
+    parser.add_argument(
+        "--client-log",
+        default="",
+        help="Optional path: write per-request client-side trace CSV",
+    )
     return parser.parse_args()
 
 
-def do_request(url: str, timeout: float, id_header: str, seq: int) -> tuple[bool, float]:
+def do_request(url: str, timeout: float, id_header: str, seq: int):
+    send_ns = time.time_ns()
     req = urllib.request.Request(url, headers={id_header: str(seq)})
     start = time.perf_counter()
+    status = 0
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             _ = resp.read()
+            status = resp.status
             ok = 200 <= resp.status < 300
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
         ok = False
     except Exception:
         ok = False
     duration = time.perf_counter() - start
-    return ok, duration
+    return ok, duration, send_ns, status
 
 
 def main() -> int:
@@ -95,12 +103,13 @@ def main() -> int:
         "lat_sum": 0.0,
     }
 
+    client_rows = []
+
     def on_done(fut: concurrent.futures.Future):
         try:
-            ok, duration = fut.result()
+            ok, duration, send_ns, status = fut.result()
         except Exception:
-            ok = False
-            duration = 0.0
+            ok, duration, send_ns, status = False, 0.0, time.time_ns(), 0
         with stats_lock:
             stats["completed"] += 1
             if ok:
@@ -108,6 +117,8 @@ def main() -> int:
             else:
                 stats["err"] += 1
             stats["lat_sum"] += duration
+            if args.client_log:
+                client_rows.append((send_ns, duration * 1000, status, ok))
 
     start = time.perf_counter()
     end = start + args.duration
@@ -146,6 +157,13 @@ def main() -> int:
     print(f"elapsed_s={elapsed:.3f} achieved_rate={sent/elapsed:.2f} rps")
     print(f"avg_client_latency_s={lat_avg:.4f}")
     print(f"workers={workers}")
+
+    if args.client_log:
+        with open(args.client_log, "w", encoding="utf-8") as f:
+            f.write("send_unix_ns,client_response_ms,status_code,ok\n")
+            for send_ns, ms, status, ok_flag in sorted(client_rows):
+                f.write(f"{send_ns},{ms:.3f},{status},{int(ok_flag)}\n")
+        print(f"client trace written -> {args.client_log}")
     return 0
 
 
