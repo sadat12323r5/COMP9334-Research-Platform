@@ -369,6 +369,38 @@ that simple models work beautifully on some and fail interestingly on others
 The labs give you the measurement skills; this is the research question, in
 four stages matching the learning outcomes.
 
+## Which servers should you model?
+
+You are **not** expected to model all eleven configurations. The intended
+scope is **two servers**:
+
+1. **Core (everyone): `python_dsp`.** One worker process, one core, a real
+   CPU-bound workload — the cleanest possible M/G/1 candidate. Everyone
+   modelling the same core server makes results comparable and mistakes easy
+   to diagnose. (You will already know it well from the labs; the `go` server
+   from Lab 3 is its synthetic cousin and a good sanity check for your DES —
+   it even logs the service time it *intended* next to the one it delivered.)
+
+2. **Challenge (choose one).** Each of these breaks at least one textbook
+   assumption; *which* assumption, and how badly, is yours to discover. In
+   roughly increasing order of modelling difficulty:
+
+   | Challenge server | What you'd be investigating |
+   |---|---|
+   | `python_dsp_mc` | Is a 3-worker server really one shared M/G/3 queue? |
+   | `java_dsp` | A thread pool on one core — and what happens early in a run |
+   | `node_dsp_mc` | A cluster of 3 event loops behind one port |
+   | `apache_dsp` | Many worker processes sharing a single core |
+   | `go_sqlite` | CPU work plus a database — where does the queue really form? |
+
+   Your Stage 2–4 pipeline should run on the challenge server unchanged; the
+   interesting part is explaining where its predictions degrade compared to
+   the core server, and why.
+
+Model the core server first, end to end (Stages 2–4), before touching the
+challenge server. A working pipeline on an easy server is worth more than a
+broken one on a hard server.
+
 **Stage 1 — Platform and measurement** = Labs 0–4 above.
 
 **Stage 2 — Parameter extraction.** From your low-rate traces, characterise:
