@@ -29,7 +29,7 @@ python3 scripts/smoke_test.py --server python_dsp
 python3 scripts/sweep.py --server python_dsp --rates 10 25 50
 ```
 
-Traces land in `traces/`. See `../docs/RESEARCH_BRIEF.md` for the exercise.
+Traces land in `traces/`. See the root `README.md` for the guided labs and the research exercise.
 
 ## macOS-specific notes
 
